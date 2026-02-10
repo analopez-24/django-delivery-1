@@ -1,0 +1,57 @@
+graph TB
+    subgraph SharedKernel["Shared Kernel - conduit.apps.core"]
+        SK_Models["TimestampedModel<br/>(models.py)"]
+        SK_Renderers["ConduitJSONRenderer<br/>(renderers.py)"]
+        SK_Exceptions["Exceptionn Handler<br/>(core_exception_handler)<br/>(exceptions.py)"]
+        SK_Utils["Utility Functions<br/>(generate_random_string)<br/>(utils.py)"]
+    end
+
+    subgraph IAM["Identity and Access Management<br/>conduit.apps.authentication"]
+        IAM_User["User Model<br/>AbstractBaseUser<br/>(models.py)"]
+        IAM_JWT["JWTAuthentication<br/>(backends.py)"]
+        IAM_Serializers["Login/Registration/UserSerializer<br/>(serializers.py)"]
+        IAM_Views["RegistrationAPIView<br/>LoginAPIView UserRetrieveUpdateAPIView<br/>(views.py)"]
+        IAM_Signals["User Lifecycle Hooks<br/>(create_related_profile)<br/>(post_save signal)<br/>(signals.py)"]
+    end
+
+    subgraph Profiles["Social Profile<br/>conduit.apps.profiles"]
+        P_Profile["Profile Model<br/>(models.py)"]
+        P_Follow["follow/unfollow<br/>is_following<br/>(models.py)"]
+        P_Favorite["favorite/unfavorite<br/>has_favorited<br/>(models.py)"]
+        P_Views["ProfileRetrieveAPIView<br/>ProfileFollowAPIView<br/>(views.py)"]
+    end
+
+    subgraph Content["Content Management<br/>conduit.apps.articles"]
+        C_Article["Article Model<br/>(models.py)"]
+        C_Comment["Comment Model<br/>(models.py)"]
+        C_Tag["Tag Model<br/>(models.py)"]
+        C_Slug["add_slug_to_article\npre_save signal<br/>(signals.py)"]
+        C_Views["ArticleViewSet<br/>CommentsListCreateAPIView<br/>TagListAPIView<br/>(views.py)"]
+    end
+
+    subgraph Engagement["Engagement\ncross-context"]
+        E_Favorites["ArticlesFavoriteAPIView<br/>(articles/views.py)"]
+        E_Feed["ArticlesFeedAPIView<br/>(articles/views.py)"]
+        E_Comments["CommentsDestroyAPIView<br/>(articles/views.py)"]
+    end
+
+    IAM_User -->|"1:1 OneToOneField"| P_Profile
+    IAM_Signals -->|"post_save: crea Profile"| P_Profile
+    P_Profile -->|"FK author"| C_Article
+    P_Profile -->|"FK author"| C_Comment
+    P_Profile -->|"M2M follows - self"| P_Profile
+    P_Profile -->|"M2M favorites"| C_Article
+    C_Article -->|"M2M"| C_Tag
+
+    SK_Models -.->|"herencia"| IAM_User
+    SK_Models -.->|"herencia"| P_Profile
+    SK_Models -.->|"herencia"| C_Article
+    SK_Models -.->|"herencia"| C_Comment
+    SK_Models -.->|"herencia"| C_Tag
+    SK_Renderers -.->|"base class"| IAM
+    SK_Renderers -.->|"base class"| Content
+    SK_Renderers -.->|"base class"| Profiles
+
+    E_Favorites -->|"usa"| P_Favorite
+    E_Feed -->|"consulta"| P_Follow
+    E_Feed -->|"consulta"| C_Article

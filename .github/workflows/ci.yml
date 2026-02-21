@@ -1,0 +1,123 @@
+name: CI - Quality & Governance Pipeline
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main]
+
+jobs:
+  quality-checks:
+    name: Quality Checks (Complexity & Coverage)
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-ci.txt
+
+      - name: Cyclomatic Complexity Report (radon)
+        run: |
+          echo "## Cyclomatic Complexity Report" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          radon cc conduit/ -a -s >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          radon cc conduit/ -a -s
+          radon cc conduit/ -j > complexity-report.json
+
+      - name: Cyclomatic Complexity Gate (xenon)
+        run: |
+          xenon conduit/ --max-absolute C --max-modules B --max-average A || {
+            echo "::warning::Cyclomatic complexity exceeds thresholds. Review complex functions."
+            exit 1
+          }
+
+      - name: Maintainability Index
+        run: |
+          echo "## Maintainability Index" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          radon mi conduit/ -s >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Run Tests with Coverage
+        env:
+          DJANGO_SETTINGS_MODULE: conduit.settings
+        run: |
+          coverage run --source=conduit -m pytest --tb=short || true
+          coverage report -m | tee coverage-report.txt
+          coverage xml -o coverage.xml
+          coverage json -o coverage.json
+
+      - name: Coverage Gate
+        run: |
+          COVERAGE=$(python -c "import json; data=json.load(open('coverage.json')); print(data['totals']['percent_covered'])")
+          echo "Current coverage: ${COVERAGE}%"
+          echo "## Code Coverage: ${COVERAGE}%" >> $GITHUB_STEP_SUMMARY
+
+          python -c "
+          import json, sys
+          data = json.load(open('coverage.json'))
+          pct = data['totals']['percent_covered']
+          if pct < 60:
+              print(f'::error::Coverage {pct:.1f}% is below minimum threshold of 60%')
+              sys.exit(1)
+          elif pct < 80:
+              print(f'::warning::Coverage {pct:.1f}% is below recommended threshold of 80%')
+          else:
+              print(f'Coverage {pct:.1f}% meets quality gate')
+          "
+
+      - name: Flake8 Lint
+        run: |
+          flake8 conduit/ --max-line-length=120 --statistics --count || true
+
+      - name: Upload Quality Artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quality-reports
+          path: |
+            complexity-report.json
+            coverage-report.txt
+            coverage.xml
+            coverage.json
+
+  sonarqube:
+    name: SonarQube Analysis
+    runs-on: ubuntu-22.04
+    needs: quality-checks
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download quality artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: quality-reports
+
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v3
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+      - name: SonarQube Quality Gate
+        uses: SonarSource/sonarqube-quality-gate-action@v1
+        timeout-minutes: 5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

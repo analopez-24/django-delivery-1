@@ -1,0 +1,54 @@
+# Pre-commit hooks for Conduit Django API
+# Install: pip install pre-commit && pre-commit install
+# Run manually: pre-commit run --all-files
+#
+# This configuration prevents committing secrets (API keys, tokens,
+# passwords) into the repository.
+
+repos:
+  # Detect secrets before they reach the repo
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args:
+          - --baseline
+          - .secrets.baseline
+        exclude: |
+          (?x)^(
+            .*\.lock|
+            .*\.json|
+            .*\.xml|
+            .*\.csv
+          )$
+
+  # Standard pre-commit hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      # Prevent large files from being committed
+      - id: check-added-large-files
+        args: ['--maxkb=500']
+      # Prevent committing to main branch directly
+      - id: no-commit-to-branch
+        args: ['--branch', 'main']
+      # Check for files that would conflict on case-insensitive filesystems
+      - id: check-case-conflict
+      # Ensure files end with a newline
+      - id: end-of-file-fixer
+      # Trim trailing whitespace
+      - id: trailing-whitespace
+      # Check YAML syntax
+      - id: check-yaml
+      # Check JSON syntax
+      - id: check-json
+
+  # Custom local hooks for additional secret detection
+  - repo: local
+    hooks:
+      - id: detect-secrets-custom
+        name: Detect hardcoded secrets (custom patterns)
+        entry: bash scripts/detect-secrets.sh
+        language: system
+        types: [python]
+        pass_filenames: true

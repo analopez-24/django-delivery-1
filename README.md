@@ -44,9 +44,19 @@ El proyecto se encuentra actualmente en un estado de **legacy degradado**, con d
 | # | Entregable | Archivo |
 |---|---|---|
 | 1 | CI Pipeline (GitHub Actions) | [.github/workflows/ci.yml](./.github/workflows/ci.yml) |
-| 2 | Configuración SonarQube | [sonar-project.properties](./sonar-project.properties) |
-| 3 | Governance (CI + DORA + Quality Gates) | [GOVERNANCE.md](./GOVERNANCE.md) |
-| 4 | Tech Debt Audit + Refactoring Plan | [TECH_DEBT_AUDIT.md](./TECH_DEBT_AUDIT.md) |
+| 2 | Dependencias CI (actualizadas) | [requirements-ci.txt](./requirements-ci.txt) |
+| 3 | Configuración SonarQube | [sonar-project.properties](./sonar-project.properties) |
+| 4 | Governance (CI + DORA + Quality Gates) | [GOVERNANCE.md](./GOVERNANCE.md) |
+| 5 | Tech Debt Audit + Refactoring Plan | [TECH_DEBT_AUDIT.md](./TECH_DEBT_AUDIT.md) |
+
+### Delivery 3: Security Hardening - DevSecOps (Semana 6)
+
+| # | Entregable | Archivo |
+|---|---|---|
+| 1 | SBOM (Software Bill of Materials) | [sbom.json](./sbom.json) |
+| 2 | Vulnerability Report (Before/After) | [VULNERABILITY_REPORT.md](./VULNERABILITY_REPORT.md) |
+| 3 | Pre-commit Hook (Secret Detection) | [.pre-commit-config.yaml](./.pre-commit-config.yaml) |
+| 4 | Script de detección de secretos | [scripts/detect-secrets.sh](./scripts/detect-secrets.sh) |
 
 ---
 
@@ -79,6 +89,20 @@ Al diseñar el plan de refactoring, decidimos organizar los pasos por **bounded 
 #### 6. Tests como Fase 0 obligatoria
 
 No existe ningún test en el proyecto. Antes de iniciar cualquier refactoring del Strangler Fig, definimos una **Fase 0 de cobertura mínima** como prerrequisito. Refactorizar sin tests sería equivalente a caminar a ciegas.
+
+### Delivery 3
+
+#### 8. CycloneDX como formato de SBOM
+
+Elegimos CycloneDX 1.5 (JSON) sobre SPDX porque es el formato adoptado por OWASP para seguridad de supply chain, tiene soporte nativo para listar vulnerabilidades dentro del mismo SBOM, y es el formato que herramientas como Trivy y Dependency-Track consumen directamente.
+
+#### 9. Pre-commit framework en lugar de Husky
+
+La rúbrica sugiere Husky como ejemplo, pero Husky es una herramienta de Node.js. Para un proyecto Python, el framework `pre-commit` es el estándar de la industria. Combinamos `detect-secrets` de Yelp (detección basada en entropía y patrones) con un script custom (`scripts/detect-secrets.sh`) que busca patrones específicos del proyecto como SECRET_KEY hardcodeada.
+
+#### 10. Remediación via upgrade, no via patch
+
+Las dos vulnerabilidades identificadas (CVE-2019-14232 en Django, CVE-2022-29217 en PyJWT) se remediaron actualizando a versiones modernas en `requirements-ci.txt`, no aplicando patches individuales. Esto es consistente con la estrategia de modernización del Strangler Fig definida en Delivery 2 y resuelve no solo las 2 CVEs documentadas sino las 30+ CVEs acumuladas en Django 1.10.5 desde su EOL en 2017.
 
 ### Metodología
 
